@@ -7,15 +7,10 @@
 #
 
 from solClient import *
+from solClientMsg import *
 import time
 
-msgCount_g = 0
-
 def messageReceiveCallback(opaqueSession_p, msg_p, user_p):
-    print "Received message:"
-    libsolclient.solClient_msg_dump(msg_p, None, 0)
-    global msgCount_g
-    msgCount_g = msgCount_g + 1
     return 0
 
 def eventCallback(opaqueSession_p, eventInfo_p, user_p):
@@ -50,7 +45,7 @@ def main():
 
     #solClient_initialize(SOLCLIENT_LOG_DEBUG, None)
     solClient_initialize()
-    print "HelloWorldSub initializing..."
+    print "HelloWorldPub initializing..."
 
     solClient_context_create(
             SOLCLIENT_CONTEXT_PROPS_DEFAULT_WITH_CREATE_THREAD,
@@ -70,22 +65,31 @@ def main():
     solClient_session_connect(session_p)
     print "Connected."
 
-    solClient_session_topicSubscribeExt(
-            session_p,
-            SOLCLIENT_SUBSCRIBE_FLAGS_WAITFORCONFIRM,
-            c_char_p("tutorial/topic")
+    msg_p = solClient_opaqueMsg_pt(None)
+    solClient_msg_alloc(byref(msg_p))
+    solClient_msg_setDeliveryMode(msg_p, SOLCLIENT_DELIVERY_MODE_DIRECT)
+
+    destination = solClient_destination_t()
+    destination.destType = SOLCLIENT_TOPIC_DESTINATION
+    destination.dest = c_char_p("tutorial/topic")
+    solClient_msg_setDestination(
+            msg_p,
+            byref(destination),
+            sizeof(destination)
     )
 
-    print "Waiting for message......"
-    while msgCount_g < 1:
-        time.sleep(1)
-        pass
-
-    solClient_session_topicSubscribeExt(
-            session_p,
-            SOLCLIENT_SUBSCRIBE_FLAGS_WAITFORCONFIRM,
-            c_char_p("tutorial/topic")
+    text_p = c_char_p("Hello world!")
+    solClient_msg_setBinaryAttachment(
+            msg_p,
+            text_p,
+            len(text_p.value)
     )
+
+    print "About to send message '" + text_p.value + "' to topic '" + destination.dest + "'..."
+    solClient_session_sendMsg(session_p, msg_p)
+
+    print "Message sent."
+    solClient_msg_free(byref(msg_p))
 
     print "Exiting."
     solClient_session_disconnect(session_p)
